@@ -1,0 +1,45 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'OpenShelf-Android-5.1.1-source-experiment.zip'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Extract source and build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q OpenShelf-Android-5.1.1-source-experiment.zip -d source
+          wrapper="$(find "$GITHUB_WORKSPACE/source" -type f -name gradlew -print -quit)"
+          if [ -z "$wrapper" ]; then
+            echo "No Gradle wrapper (gradlew) found in the ZIP archive." >&2
+            exit 1
+          fi
+          project_dir="$(dirname "$wrapper")"
+          cd "$project_dir"
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+          mkdir -p "$GITHUB_WORKSPACE/apk"
+          find . -type f -path '*/build/outputs/apk/*/*.apk' -exec cp {} "$GITHUB_WORKSPACE/apk/" \;
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openshelf-debug-apk
+          path: apk/*.apk
+          if-no-files-found: error
